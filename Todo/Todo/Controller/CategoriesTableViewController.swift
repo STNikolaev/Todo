@@ -6,124 +6,125 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
+import ChameleonFramework
 
-class CategoriesTableViewController: UITableViewController {
-
-    var categories = [Category]()
+class CategoriesTableViewController: SwipeTableViewController {
     
-
+    let realm = try! Realm()
     
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
-
+    var categories: Results<Category>?
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         loadCategories()
+        
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        
+
+            guard let navbar = navigationController?.navigationBar else {
+                fatalError("Navigation controller does not exist")
+            }
+                
+                navbar.backgroundColor = UIColor(hexString: "1D9BF6")
+            navbar.tintColor = UIColor.white
+                
+
+            }
+    
+    // MARK: - Data Manipulation Methods
+    
+    func save(category: Category) {
+        do {
+            try realm.write {
+                realm.add(category)
+            }
+        } catch {
+            print("Error saving category \(error)")
+        }
+        tableView.reloadData()
+    }
+    
+    func loadCategories() {
+        
+        categories = realm.objects(Category.self)
+        tableView.reloadData()
+    }
+    
+    // MARK: - Delete Data From Swipe
+    
+    override func updateModel(at indexPath: IndexPath) {
+        if let categoryForDeletion = self.categories?[indexPath.row] {
+            do {
+                try self.realm.write {
+                    self.realm.delete(categoryForDeletion)
+                }
+            } catch {
+                print("Error for deleting \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Add New Categories
+    
+    @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
+        
+        var textField = UITextField()
+        let alert = UIAlertController(title: "Add a New Cateogry", message: "", preferredStyle: .alert)
+        let action = UIAlertAction(title: "Add", style: .default) { (action) in
+            let newCategory = Category()
+            newCategory.name = textField.text!
+            newCategory.colour = UIColor.randomFlat().hexValue()
+            self.save(category: newCategory)
+        }
+        
+        alert.addAction(action)
+        alert.addTextField { (field) in
+            textField = field
+            textField.placeholder = "Add a new category"
+        }
+        present(alert, animated: true, completion: nil)
     }
     
     // MARK: - TableView Datasource Methods
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-
-        return categories.count
+        
+        return categories?.count ?? 1
     }
     
-    
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         
-        let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
+        if let category = categories?[indexPath.row] {
+            cell.textLabel?.text = category.name
+            
+            if let colour = UIColor(hexString: category.colour) {
+                cell.backgroundColor = colour
+                
+                cell.textLabel?.textColor = ContrastColorOf(colour , returnFlat: true)
+            }
+           
+        }
         
-        let category = categories[indexPath.row]
         
-        cell.textLabel!.text = category.name
         
         return cell
     }
     
-    
-    // MARK: - Table View Delegate Methods
-    
+    //MARK: - Tableview Delegate Methods
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        
         performSegue(withIdentifier: "goToItems", sender: self)
-        
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        
         let destinationVC = segue.destination as! ToDoListTableViewController
-        
         if let indexPath = tableView.indexPathForSelectedRow {
-            destinationVC.selectedCategory = categories[indexPath.row]
+            destinationVC.selectedCategory = categories?[indexPath.row]
         }
     }
-    
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            context.delete(categories[indexPath.row])
-            categories.remove(at: indexPath.row)
-            tableView.deleteRows(at: [indexPath], with: .fade)
-            
-            saveCategories()
-            
-        }
-    }
-    
-    
-    // MARK: - Data Manipulation Methods
-    
-    func saveCategories() {
-        
-        do {
-            try context.save()
-        } catch {
-            print("Error saving categories\(error)")
-        }
-        self.tableView.reloadData()
-    }
-    
-    
-    func loadCategories(with request: NSFetchRequest<Category> = Category.fetchRequest()) {
-        do {
-            categories = try context.fetch(request)
-        } catch {
-            print("Error fething data from categories\(error)")
-        }
-        
-        tableView.reloadData()
-    }
-
-    
-
-    // MARK: - Add New Categories
-
-    @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
-        var textField = UITextField()
-        let alert = UIAlertController(title: "Add new category", message: "", preferredStyle: .alert)
-        let action = UIAlertAction(title: "Add category", style: .default) { (action) in
-            
-            
-            let newCategory = Category(context: self.context)
-            newCategory.name = textField.text!
-            
-            self.categories.append(newCategory)
-            
-            self.saveCategories()
-        }
-        
-        alert.addTextField { (alertTextField) in
-            alertTextField.placeholder = "Create new category"
-            textField = alertTextField
-        }
-        
-        alert.addAction(action)
-        present(alert, animated: true, completion: nil)
-    }
-    
-    
-
-
-    
-    
 }
+
